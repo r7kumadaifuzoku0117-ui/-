@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英単語ジャンパー - English Word Jumper</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Zen Maru Gothic', 'Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: 'Zen Maru Gothic', 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* Glassmorphism utility classes */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        /* 3D Gem / Piece Styles */
+        .piece {
+            background: #ff0d25;
+            background-image: radial-gradient(circle at 40% 40%, #ff4d61, #e6001a 70%, #b30012 100%);
+            border: 3px solid #111111;
+            border-radius: 53% 47% 52% 48% / 49% 51% 49% 51%;
+            box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 3px 3px 5px rgba(255,255,255,0.5), 0 4px 10px rgba(230, 0, 26, 0.4);
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+            position: relative;
+        }
+
+        .piece.selected {
+            background: #facc15;
+            background-image: radial-gradient(circle at 40% 40%, #fef08a, #eab308 70%, #ca8a04 100%);
+            border: 3px solid #000000;
+            box-shadow: inset -2px -2px 6px rgba(0,0,0,0.3), inset 2px 2px 6px rgba(255,255,255,0.9), 0 0 18px rgba(234, 179, 8, 0.9);
+            transform: scale(1.15);
+            animation: pulse-glow 1.2s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(1.1); box-shadow: 0 0 12px rgba(234, 179, 8, 0.6); }
+            100% { transform: scale(1.22); box-shadow: 0 0 22px rgba(234, 179, 8, 1); }
+        }
+
+        /* Hole Styles */
+        .hole {
+            background: radial-gradient(circle at 50% 50%, #1e293b, #0f172a);
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.8), inset -1px -1px 3px rgba(255,255,255,0.1);
+        }
+
+        .hole.target-valid {
+            background: radial-gradient(circle at 50% 50%, #10b981, #047857);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.8), inset 0 0 8px rgba(255,255,255,0.6);
+            animation: target-bounce 1s infinite alternate;
+            cursor: pointer;
+        }
+
+        @keyframes target-bounce {
+            0% { transform: scale(0.92); opacity: 0.8; }
+            100% { transform: scale(1.08); opacity: 1; }
+        }
+
+        /* Shimmer effect for buttons */
+        .btn-shimmer {
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-shimmer::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(60deg, transparent, rgba(255,255,255,0.25), transparent);
+            transform: rotate(30deg);
+            transition: all 0.6s ease;
+        }
+        .btn-shimmer:hover::after {
+            left: 100%;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800 min-h-screen flex flex-col justify-between bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black relative overflow-x-hidden">
+
+    <!-- Canvas for Confetti -->
+    <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50"></canvas>
+
+    <header class="w-full max-w-4xl mx-auto px-4 pt-4 pb-2 flex justify-between items-center z-10">
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="showHomeScreen()">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-rose-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-rose-500/30">
+                英
+            </div>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-black text-white tracking-wide flex items-center gap-2">
+                    英単語ジャンパー
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">Puzzle & Vocab</span>
+                </h1>
+                <p class="text-xs text-indigo-200/80 hidden sm:block">パズルを解きながら英単語を暗記！</p>
+            </div>
+        </div>
+
+        <!-- Utility Buttons -->
+        <div class="flex items-center gap-2">
+            <!-- Saved Vocab Button -->
+            <button onclick="openMyVocabModal()" class="px-2.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30 shadow-md transition-all active:scale-95 flex items-center gap-1.5 text-xs font-extrabold" title="マイ単語帳">
+                <span>📚</span>
+                <span class="hidden sm:inline">マイ単語帳</span>
+                <span id="header-vocab-badge" class="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">0</span>
+            </button>
+
+            <!-- Leaderboard Button -->
+            <button onclick="openLeaderboardModal()" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 border border-slate-700/60 shadow-md transition-all active:scale-95" title="全国ランキング">
+                🏆
+            </button>
+
+            <!-- Sound Toggle -->
+            <button id="btn-sound" onclick="toggleSound()" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-indigo-300 border border-slate-700/60 shadow-md transition-all active:scale-95" title="効果音 ON/OFF">
+                <svg id="icon-sound-on" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M11 5L6 9H2v6h4l5 4V5z"/></svg>
+                <svg id="icon-sound-off" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clip-rule="evenodd"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>
+            </button>
+
+            <!-- User Auth Profile Button -->
+            <button id="btn-auth-profile" onclick="openAuthModal()" class="px-3 py-2 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white border border-indigo-400/40 shadow-md transition-all active:scale-95 text-xs font-bold flex items-center gap-1.5">
+                <span id="user-avatar-badge">👤</span>
+                <span id="user-name-badge">ゲスト</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="w-full max-w-4xl mx-auto px-3 my-auto flex flex-col items-center gap-4 z-10">
+
+        <!-- VIEW 1: HOME / START SCREEN -->
+        <div id="view-home" class="w-full max-w-md flex flex-col items-center gap-5 my-auto py-6">
+            
+            <!-- Hero Title Card -->
+            <div class="glass-panel w-full rounded-3xl p-6 text-center shadow-2xl border-2 border-indigo-300/40">
+                <div class="inline-block px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-black mb-3">
+                    飛び越して消す ✖️ 英単語穴埋め
+                </div>
+                <h2 class="text-3xl font-black text-slate-900 mb-2">英単語ジャンパー</h2>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    パズルのコマを飛び越えさせて消しながら、出題される英単語穴埋めクイズをクリアしよう！
+                </p>
+
+                <!-- High Score Banner -->
+                <div class="mt-5 grid grid-cols-2 gap-3">
+                    <div class="bg-indigo-50/90 rounded-2xl p-3 border border-indigo-100">
+                        <div class="text-[10px] font-bold text-slate-500">最高スコア</div>
+                        <div id="home-stat-highscore" class="text-xl font-black text-indigo-700">0</div>
+                    </div>
+                    <div class="bg-amber-50/90 rounded-2xl p-3 border border-amber-100">
+                        <div class="text-[10px] font-bold text-slate-500">マイ単語帳</div>
+                        <div id="home-stat-vocab" class="text-xl font-black text-amber-700">0 語</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resume Button Container -->
+            <div id="container-resume-btn" class="w-full hidden">
+                <button onclick="resumeSavedGame()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-black text-lg shadow-xl shadow-emerald-500/25 hover:from-emerald-600 hover:to-teal-700 transition-all btn-shimmer active:scale-95 flex items-center justify-center gap-2 border-2 border-emerald-300/50">
+                    <span>▶️</span>
+                    <span id="resume-btn-text">つづきから遊ぶ</span>
+                </button>
+            </div>
+
+            <!-- Game Setup Card -->
+            <div class="glass-panel w-full rounded-3xl p-5 shadow-xl border border-indigo-100 space-y-4">
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <span>⚙️</span> ゲーム設定
+                </h3>
+
+                <!-- Mode Select -->
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1.5">盤面モード (ノーマルは得点2倍！)</label>
+                    <div class="grid grid-cols-2 gap-2 bg-slate-200/70 p-1.5 rounded-2xl text-xs font-bold">
+                        <button id="home-mode-quick" onclick="setGameMode('quick')" class="py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm">クイック (15マス)</button>
+                        <button id="home-mode-normal" onclick="setGameMode('normal')" class="py-2 rounded-xl transition-all text-slate-600 hover:text-slate-900">ノーマル (33マス ×2倍)</button>
+                    </div>
+                </div>
+
+                <!-- Difficulty Select -->
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1.5">単語難易度 (初級:10pt / 中級:20pt / 上級:30pt)</label>
+                    <div class="grid grid-cols-3 gap-1.5 bg-slate-200/70 p-1.5 rounded-2xl text-xs font-bold">
+                        <button id="home-diff-basic" onclick="setGameDifficulty('basic')" class="py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm">初級 (+10pt)</button>
+                        <button id="home-diff-inter" onclick="setGameDifficulty('inter')" class="py-2 rounded-xl transition-all text-slate-600 hover:text-slate-900">中級 (+20pt)</button>
+                        <button id="home-diff-adv" onclick="setGameDifficulty('adv')" class="py-2 rounded-xl transition-all text-slate-600 hover:text-slate-900">上級 (+30pt)</button>
+                    </div>
+                </div>
+
+                <!-- Start New Game Button -->
+                <button onclick="handleStartNewGameClick()" class="w-full py-4 mt-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-rose-600 text-white font-black text-lg shadow-xl shadow-indigo-500/30 hover:from-indigo-700 hover:to-rose-700 transition-all btn-shimmer active:scale-95 flex items-center justify-center gap-2">
+                    <span>🎮</span>
+                    <span>はじめから遊ぶ</span>
+                </button>
+            </div>
+
+            <button onclick="openRulesModal()" class="text-xs font-bold text-indigo-200 hover:text-white transition-all underline decoration-dashed">
+                📖 詳しい遊び方を見る
+            </button>
+
+        </div>
+
+        <!-- VIEW 2: MAIN GAME BOARD SCREEN -->
+        <div id="view-game" class="w-full flex flex-col items-center gap-3 hidden">
+
+            <!-- Controls Panel -->
+            <div class="w-full glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-wrap items-center justify-between gap-2 text-slate-800">
+                <!-- Status Badges -->
+                <div class="flex items-center gap-2 text-xs font-extrabold">
+                    <span id="badge-game-mode" class="px-2.5 py-1 rounded-xl bg-indigo-100 text-indigo-700 border border-indigo-200">クイック</span>
+                    <span id="badge-game-diff" class="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-800 border border-amber-200">初級</span>
+                    <span id="badge-save-status" class="px-2 py-1 rounded-xl bg-slate-200 text-slate-600 text-[10px] transition-all">
+                        💾 セーブ完了
+                    </span>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-2">
+                    <button onclick="saveAndPauseGame()" class="px-3 py-1.5 text-xs font-extrabold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-md active:scale-95 flex items-center gap-1">
+                        ⏸️ 中断保存
+                    </button>
+                    <button onclick="requestHint()" class="px-3 py-1.5 text-xs font-extrabold rounded-xl bg-amber-500/20 text-amber-900 hover:bg-amber-500/30 border border-amber-400/40 transition-all flex items-center gap-1">
+                        💡 ヒント
+                    </button>
+                    <button onclick="showHomeScreen()" class="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all">
+                        🏠 戻る
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scoreboard -->
+            <div class="w-full grid grid-cols-5 gap-1.5 sm:gap-3 text-center">
+                <div class="glass-panel rounded-2xl p-2 sm:p-3 shadow-lg">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-900/70">ラウンド</div>
+                    <div id="stat-round" class="text-base sm:text-2xl font-black text-indigo-700">R 1</div>
+                </div>
+                <div class="glass-panel rounded-2xl p-2 sm:p-3 shadow-lg">
+                    <div class="text-[10px] sm:text-xs font-bold text-indigo-900/70">累計スコア</div>
+                    <div id="stat-score" class="text-base sm:text-2xl font-black text-indigo-600">0</div>
+                </div>
+                <div class="glass-panel rounded-2xl p-2 sm:p-3 shadow-lg">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-900/70">残りのコマ</div>
+                    <div id="stat-remaining" class="text-base sm:text-2xl font-black text-rose-500">14</div>
+                    <div id="stat-target-pegs" class="text-[9px] sm:text-[10px] font-bold text-indigo-600 mt-0.5">目標: 9個以下</div>
+                </div>
+                <div class="glass-panel rounded-2xl p-2 sm:p-3 shadow-lg">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-900/70">正解率</div>
+                    <div id="stat-accuracy" class="text-base sm:text-2xl font-black text-emerald-600">100%</div>
+                </div>
+                <div class="glass-panel rounded-2xl p-2 sm:p-3 shadow-lg">
+                    <div class="text-[10px] sm:text-xs font-bold text-slate-900/70">最高スコア</div>
+                    <div id="stat-highscore" class="text-base sm:text-2xl font-black text-amber-500">0</div>
+                </div>
+            </div>
+
+            <!-- Main Solitaire Grid Container -->
+            <div class="relative w-full max-w-[420px] aspect-square my-1 flex items-center justify-center p-3 sm:p-5 rounded-3xl bg-slate-800/90 border-4 border-slate-700/80 shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div id="hint-banner" class="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-amber-400 text-amber-950 font-bold text-xs shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-20">
+                    動かせるコマをハイライトしました！
+                </div>
+
+                <div id="game-board" class="w-full h-full grid gap-1.5 sm:gap-2 justify-center items-center">
+                    <!-- Dynamic Grid injected via JS -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- QUIZ MODAL -->
+    <div id="quiz-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border-2 border-indigo-400/30 transform scale-90 transition-all duration-300" id="quiz-modal-card">
+            
+            <div class="flex items-center justify-between mb-3">
+                <span class="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-700 font-extrabold text-xs border border-indigo-300/40">
+                    🧩 ジャンプ認証クイズ
+                </span>
+
+                <button id="btn-quiz-bookmark" onclick="toggleQuizBookmark()" class="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs font-bold transition-all flex items-center gap-1">
+                    <span id="quiz-bookmark-icon">⭐</span>
+                    <span id="quiz-bookmark-text">単語帳に登録</span>
+                </button>
+            </div>
+
+            <!-- Question Display -->
+            <div class="bg-slate-900 rounded-2xl p-4 sm:p-5 text-center text-white border border-slate-700/80 my-2 shadow-inner relative">
+                <div class="text-xs text-indigo-300 mb-1">空欄に入る文字を選んでください</div>
+                <div id="quiz-word-display" class="text-3xl sm:text-4xl font-black tracking-widest text-amber-400 font-mono my-2">
+                    a _ p l e
+                </div>
+                
+                <div class="flex items-center justify-center gap-2 mt-2">
+                    <span id="quiz-meaning-display" class="text-xs sm:text-sm text-slate-300 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+                        意味: りんご
+                    </span>
+                    <button onclick="speakCurrentWord()" class="p-1.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition-all" title="音声再生">
+                        🔊
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quiz Choices Grid -->
+            <div id="quiz-choices-container" class="grid grid-cols-2 gap-2.5 my-4">
+                <!-- Injected choices -->
+            </div>
+
+            <p class="text-[11px] text-center text-slate-500 font-bold">
+                正解するとコマを飛び越えて消去できます！
+            </p>
+        </div>
+    </div>
+
+    <!-- MY VOCAB MODAL -->
+    <div id="modal-vocab" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl border-2 border-amber-300/40 flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">📚</span>
+                    <h3 class="text-lg font-black text-slate-900">マイ単語帳</h3>
+                </div>
+                <button onclick="closeMyVocabModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold">
+                    ✕
+                </button>
+            </div>
+
+            <div class="flex items-center justify-between my-3 gap-2">
+                <span id="vocab-total-count" class="text-xs font-bold text-slate-600">登録済み: 0 語</span>
+                <button onclick="clearAllVocab()" class="text-xs text-rose-600 font-bold hover:underline">すべて削除</button>
+            </div>
+
+            <div id="vocab-list-container" class="flex-grow overflow-y-auto space-y-2 pr-1 my-2">
+                <!-- Injected vocab list -->
+            </div>
+        </div>
+    </div>
+
+    <!-- LEADERBOARD MODAL -->
+    <div id="modal-leaderboard" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border-2 border-amber-300/40 flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">🏆</span>
+                    <h3 class="text-lg font-black text-slate-900">ハイスコアランキング</h3>
+                </div>
+                <button onclick="closeLeaderboardModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold">
+                    ✕
+                </button>
+            </div>
+
+            <div id="leaderboard-list-container" class="flex-grow overflow-y-auto space-y-2 pr-1 my-3">
+                <!-- Injected leaderboard -->
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTH / USER LOGIN MODAL -->
+    <div id="modal-auth" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 border-indigo-300/40 relative">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold">
+                ✕
+            </button>
+
+            <h3 class="text-xl font-black text-slate-900 text-center mb-2">コードネームでログイン</h3>
+            <p class="text-xs text-slate-600 text-center mb-4">
+                自分のコードネームを入力してログインすると、過去にセーブしたデータや単語帳が呼び出せます！
+            </p>
+
+            <div id="auth-state-guest" class="space-y-4">
+                <form onsubmit="handleAuthSubmit(event)" class="space-y-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">コードネーム（ユーザー名）</label>
+                        <input type="text" id="auth-input-name" placeholder="例: EigoHero77" required minlength="2" maxlength="15" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <button type="submit" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg transition-all">
+                        このコードネームでログイン / データ切替
+                    </button>
+                </form>
+
+                <div id="auth-known-users-container" class="mt-4 pt-3 border-t border-slate-200 hidden">
+                    <div class="text-[11px] font-bold text-slate-500 mb-2">保存されているアカウントから選ぶ:</div>
+                    <div id="auth-known-users-list" class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                        <!-- Account buttons -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="auth-state-user" class="space-y-4 hidden text-center">
+                <div class="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                    <div class="text-3xl mb-1">👤</div>
+                    <div id="auth-current-username" class="text-base font-black text-slate-800">ユーザー名</div>
+                    <div class="text-xs text-indigo-600 font-bold mt-1">ログイン中</div>
+                </div>
+                <button onclick="switchUserAccount()" class="w-full py-2.5 rounded-xl bg-indigo-100 text-indigo-700 hover:bg-indigo-200 font-bold text-xs transition-all mb-2">
+                    別のコードネームでログインする
+                </button>
+                <button onclick="handleLogout()" class="w-full py-2.5 rounded-xl bg-rose-100 text-rose-700 hover:bg-rose-200 font-bold text-xs transition-all">
+                    ログアウト（ゲストに戻る）
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULT MODAL -->
+    <div id="modal-result" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 border-indigo-400/40 text-center">
+            <div id="result-icon" class="text-5xl mb-2">🎉</div>
+            <h3 id="result-title" class="text-2xl font-black text-slate-900 mb-1">ラウンドクリア！</h3>
+            <p id="result-subtitle" class="text-xs text-slate-600 mb-3">見事なパズルプレイでした！</p>
+
+            <div id="result-target-status" class="mb-4 py-2 px-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs font-black text-indigo-900">
+                🎯 目標: 60%以下 (9個) ➔ 結果: 40% (6個)
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 bg-slate-100 p-3 rounded-2xl border border-slate-200 mb-4">
+                <div>
+                    <div class="text-[10px] font-bold text-slate-500">獲得スコア</div>
+                    <div id="res-score" class="text-lg font-black text-indigo-700">0</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold text-slate-500">残コマ</div>
+                    <div id="res-pegs" class="text-lg font-black text-rose-600">1</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold text-slate-500">正解率</div>
+                    <div id="res-accuracy" class="text-lg font-black text-emerald-600">100%</div>
+                </div>
+            </div>
+
+            <div class="text-left mb-4">
+                <div class="text-xs font-black text-slate-700 mb-1 flex items-center justify-between">
+                    <span>📖 このラウンドで出会った単語</span>
+                    <span class="text-[10px] font-normal text-slate-500">⭐タップで単語帳に追加</span>
+                </div>
+                <div id="res-words-review" class="max-h-32 overflow-y-auto space-y-1.5 p-1">
+                    <!-- Reviewed words -->
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button id="btn-next-round" onclick="startNextRound()" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-rose-600 text-white font-black text-sm shadow-lg hover:from-indigo-700 hover:to-rose-700 transition-all btn-shimmer">
+                    次のラウンドへ ➔
+                </button>
+                <button id="btn-restart-game" onclick="handleStartNewGameClick(); closeResultModal();" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-600 text-white font-black text-sm shadow-lg hover:from-amber-600 hover:to-rose-700 transition-all btn-shimmer hidden">
+                    🔄 はじめからやり直す
+                </button>
+                <button onclick="closeResultModal(); showHomeScreen();" class="px-4 py-3.5 rounded-2xl bg-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-300 transition-all">
+                    ホーム
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RULES MODAL -->
+    <div id="modal-rules" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 border-indigo-300/40 relative max-h-[85vh] flex flex-col">
+            <button onclick="closeRulesModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold">
+                ✕
+            </button>
+            <h3 class="text-xl font-black text-slate-900 mb-3 flex items-center gap-2">
+                <span>📖</span> 遊び方ガイド
+            </h3>
+            <div class="overflow-y-auto space-y-3 text-xs text-slate-700 leading-relaxed pr-1 my-2">
+                <div class="p-3 bg-indigo-50 rounded-2xl border border-indigo-100">
+                    <div class="font-black text-indigo-900 mb-1">1. コマをジャンパーさせよう</div>
+                    隣接するコマを上下左右に1つ飛び越えて、空いている穴へ移動できます。飛び越えられたコマは消去されます！
+                </div>
+                <div class="p-3 bg-amber-50 rounded-2xl border border-amber-100">
+                    <div class="font-black text-amber-900 mb-1">2. 英単語クイズに正解しよう</div>
+                    ジャンプするたびに英単語の穴埋めクイズが出題されます。正解するとジャンプが完了しスコアを獲得！
+                </div>
+                <div class="p-3 bg-rose-50 rounded-2xl border border-rose-100">
+                    <div class="font-black text-rose-900 mb-1">3. ラウンドノルマを達成しよう！</div>
+                    コマを動かせなくなった時点で、残ったコマの割合が目標値以下であればクリア！
+                    <ul class="mt-1 list-disc list-inside text-[11px] font-bold text-slate-600 space-y-0.5">
+                        <li>R1: 60%以下</li>
+                        <li>R2: 50%以下</li>
+                        <li>R3: 40%以下</li>
+                        <li>R4以降: 30%以下</li>
+                    </ul>
+                    達しなかった場合はその場でゲームオーバーとなります。
+                </div>
+                <div class="p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <div class="font-black text-emerald-900 mb-1">4. マイ単語帳を活用しよう</div>
+                    気になる単語は「⭐」ボタンでマイ単語帳にいつでも追加可能。ネイティブ音声で発音練習もできます。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="w-full text-center py-3 text-xs text-indigo-200/50 z-10">
+        英単語ジャンパー &copy; 2026 - 楽しく学ぶ穴埋めパズル学習
+    </footer>
+
+    <script>
+        // Global State & Database Setup
+        window.appState = {
+            mode: 'quick',
+            difficulty: 'basic',
+            soundEnabled: true,
+            highScore: 0,
+            userProfile: {
+                username: 'ゲスト',
+                isGuest: true,
+                savedWords: []
+            },
+            currentGame: null
+        };
+
+        const VOCAB_DATABASE = {
+            basic: [
+                { word: 'apple', meaning: 'りんご' },
+                { word: 'banana', meaning: 'バナナ' },
+                { word: 'orange', meaning: 'オレンジ' },
+                { word: 'book', meaning: '本' },
+                { word: 'school', meaning: '学校' },
+                { word: 'friend', meaning: '友達' },
+                { word: 'happy', meaning: '幸せな' },
+                { word: 'summer', meaning: '夏' },
+                { word: 'music', meaning: '音楽' },
+                { word: 'family', meaning: '家族' },
+                { word: 'animal', meaning: '動物' },
+                { word: 'doctor', meaning: '医師' },
+                { word: 'garden', meaning: '庭' },
+                { word: 'window', meaning: '窓' },
+                { word: 'yellow', meaning: '黄色' },
+                { word: 'planet', meaning: '惑星' },
+                { word: 'camera', meaning: 'カメラ' },
+                { word: 'flower', meaning: '花' },
+                { word: 'winter', meaning: '冬' },
+                { word: 'travel', meaning: '旅行する' }
+            ],
+            inter: [
+                { word: 'challenge', meaning: '挑戦' },
+                { word: 'courage', meaning: '勇気' },
+                { word: 'future', meaning: '未来' },
+                { word: 'journey', meaning: '旅・道のり' },
+                { word: 'memory', meaning: '記憶' },
+                { word: 'treasure', meaning: '宝物' },
+                { word: 'freedom', meaning: '自由' },
+                { word: 'knowledge', meaning: '知識' },
+                { word: 'wisdom', meaning: '知恵' },
+                { word: 'victory', meaning: '勝利' },
+                { word: 'advantage', meaning: '強み・有利' },
+                { word: 'horizon', meaning: '地平線' },
+                { word: 'discover', meaning: '発見する' },
+                { word: 'inspire', meaning: 'ひらめきを与える' },
+                { word: 'balance', meaning: '調和・バランス' },
+                { word: 'explore', meaning: '探検する' },
+                { word: 'harmony', meaning: '調和' },
+                { word: 'patience', meaning: '忍耐' },
+                { word: 'strategy', meaning: '戦略' },
+                { word: 'ambition', meaning: '抱負・野心' }
+            ],
+            adv: [
+                { word: 'pioneer', meaning: '先駆者' },
+                { word: 'persistence', meaning: '根気・粘り強さ' },
+                { word: 'triumph', meaning: '大勝利' },
+                { word: 'brilliant', meaning: '輝かしい・優秀な' },
+                { word: 'endeavor', meaning: '試み・努力' },
+                { word: 'prosperity', meaning: '繁栄' },
+                { word: 'tranquility', meaning: '静寂・平穏' },
+                { word: 'perspective', meaning: '視点・見識' },
+                { word: 'innovation', meaning: '革新' },
+                { word: 'resilience', meaning: '回復力・弾力性' },
+                { word: 'empathy', meaning: '共感・同情' },
+                { word: 'integrity', meaning: '誠実さ' },
+                { word: 'authenticity', meaning: '本物であること・確実性' },
+                { word: 'magnificent', meaning: '荘厳な・すばらしい' },
+                { word: 'perseverance', meaning: '不屈の努力' }
+            ]
+        };
+
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playSelect() {
+                if (!window.appState.soundEnabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(659.25, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playCorrect() {
+                if (!window.appState.soundEnabled) return;
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.06);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.06 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.06);
+                    osc.stop(this.ctx.currentTime + idx * 0.06 + 0.2);
+                });
+            }
+
+            playWrong() {
+                if (!window.appState.soundEnabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(120, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playFanfare() {
+                if (!window.appState.soundEnabled) return;
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.1);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.1 + 0.35);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.1);
+                    osc.stop(this.ctx.currentTime + idx * 0.1 + 0.35);
+                });
+            }
+        }
+
+        const soundEngine = new SoundEngine();
+
+        function triggerConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#f43f5e', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b'];
+
+            for (let i = 0; i < 80; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 16,
+                    vy: (Math.random() - 0.8) * 16,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    radius: Math.random() * 6 + 4,
+                    alpha: 1
+                });
+            }
+
+            let frame = 0;
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.3;
+                    p.alpha -= 0.015;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = Math.max(0, p.alpha);
+                    ctx.fill();
+                });
+
+                frame++;
+                if (frame < 70) {
+                    requestAnimationFrame(animate);
+                } else {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+            animate();
+        }
+
+        window.speakWord = function(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const ut = new SpeechSynthesisUtterance(text);
+                ut.lang = 'en-US';
+                ut.rate = 0.85;
+                window.speechSynthesis.speak(ut);
+            }
+        };
+
+        class SolitaireGame {
+            constructor(mode, difficulty, existingState = null) {
+                this.mode = mode;
+                this.difficulty = difficulty;
+                this.selected = null;
+                this.validTargets = [];
+
+                if (existingState) {
+                    this.round = existingState.round || 1;
+                    this.score = existingState.score || 0;
+                    this.board = existingState.board;
+                    this.gridRows = existingState.gridRows;
+                    this.gridCols = existingState.gridCols;
+                    this.totalQuestions = existingState.totalQuestions || 0;
+                    this.correctQuestions = existingState.correctQuestions || 0;
+                    this.roundWords = existingState.roundWords || [];
+                } else {
+                    this.round = 1;
+                    this.score = 0;
+                    this.totalQuestions = 0;
+                    this.correctQuestions = 0;
+                    this.roundWords = [];
+                    this.setupNewBoard();
+                }
+            }
+
+            getTargetPercent() {
+                if (this.round === 1) return 60;
+                if (this.round === 2) return 50;
+                if (this.round === 3) return 40;
+                return 30;
+            }
+
+            getTotalHoles() {
+                return this.mode === 'quick' ? 15 : 33;
+            }
+
+            getMaxAllowedPegs() {
+                return Math.floor(this.getTotalHoles() * (this.getTargetPercent() / 100));
+            }
+
+            setupNewBoard() {
+                this.selected = null;
+                this.validTargets = [];
+
+                if (this.mode === 'quick') {
+                    this.gridRows = 5;
+                    this.gridCols = 5;
+                    this.board = Array(5).fill(null).map(() => Array(5).fill(-1));
+                    const validPos = [
+                        [0,2],
+                        [1,1],[1,2],[1,3],
+                        [2,0],[2,1],[2,2],[2,3],[2,4],
+                        [3,1],[3,2],[3,3],
+                        [4,2]
+                    ];
+                    validPos.forEach(([r,c]) => {
+                        this.board[r][c] = (r === 2 && c === 2) ? 0 : 1;
+                    });
+                } else {
+                    this.gridRows = 7;
+                    this.gridCols = 7;
+                    this.board = Array(7).fill(null).map(() => Array(7).fill(-1));
+                    for (let r = 0; r < 7; r++) {
+                        for (let c = 0; c < 7; c++) {
+                            if ((r < 2 || r > 4) && (c < 2 || c > 4)) {
+                                this.board[r][c] = -1;
+                            } else {
+                                this.board[r][c] = (r === 3 && c === 3) ? 0 : 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+            getRemainingPegsCount() {
+                let cnt = 0;
+                for (let r = 0; r < this.gridRows; r++) {
+                    for (let c = 0; c < this.gridCols; c++) {
+                        if (this.board[r][c] === 1) cnt++;
+                    }
+                }
+                return cnt;
+            }
+
+            getValidTargets(r, c) {
+                const targets = [];
+                const dirs = [
+                    [-2, 0, -1, 0],
+                    [2, 0, 1, 0],
+                    [0, -2, 0, -1],
+                    [0, 2, 0, 1]
+                ];
+
+                dirs.forEach(([dr, dc, mr, mc]) => {
+                    const tr = r + dr;
+                    const tc = c + dc;
+                    const mrR = r + mr;
+                    const mrC = c + mc;
+
+                    if (
+                        tr >= 0 && tr < this.gridRows &&
+                        tc >= 0 && tc < this.gridCols &&
+                        this.board[tr][tc] === 0 &&
+                        this.board[mrR][mrC] === 1
+                    ) {
+                        targets.push({ tr, tc, mrR, mrC });
+                    }
+                });
+                return targets;
+            }
+
+            hasAvailableMoves() {
+                for (let r = 0; r < this.gridRows; r++) {
+                    for (let c = 0; c < this.gridCols; c++) {
+                        if (this.board[r][c] === 1) {
+                            if (this.getValidTargets(r, c).length > 0) return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            executeMove(move) {
+                this.board[move.fromR][move.fromC] = 0;
+                this.board[move.mrR][move.mrC] = 0;
+                this.board[move.tr][move.tc] = 1;
+
+                this.selected = null;
+                this.validTargets = [];
+
+                let basePoints = 10;
+                if (this.difficulty === 'inter') basePoints = 20;
+                if (this.difficulty === 'adv') basePoints = 30;
+
+                let modeMultiplier = (this.mode === 'normal') ? 2 : 1;
+
+                const pointsEarned = basePoints * modeMultiplier;
+                this.score += pointsEarned;
+                this.correctQuestions++;
+
+                if (window.appState.highScore < this.score) {
+                    window.appState.highScore = this.score;
+                    saveHighScoreToLocalStorage(this.score);
+                }
+
+                saveGameStateToLocalStorage();
+            }
+        }
+
+        let currentQuizQuestion = null;
+
+        window.openQuizForMove = function(fromR, fromC, target) {
+            const list = VOCAB_DATABASE[window.appState.currentGame.difficulty] || VOCAB_DATABASE.basic;
+            const wordObj = list[Math.floor(Math.random() * list.length)];
+
+            const charIdx = Math.floor(Math.random() * wordObj.word.length);
+            const correctChar = wordObj.word[charIdx].toLowerCase();
+
+            const letters = 'abcdefghijklmnopqrstuvwxyz';
+            const choicesSet = new Set([correctChar]);
+            while (choicesSet.size < 4) {
+                choicesSet.add(letters[Math.floor(Math.random() * letters.length)]);
+            }
+
+            const choices = Array.from(choicesSet).sort(() => Math.random() - 0.5);
+            const blankWord = wordObj.word.split('').map((ch, idx) => idx === charIdx ? '_' : ch).join(' ');
+
+            currentQuizQuestion = {
+                wordObj,
+                correctChar,
+                choices,
+                blankWord,
+                move: { fromR, fromC, tr: target.tr, tc: target.tc, mrR: target.mrR, mrC: target.mrC }
+            };
+
+            document.getElementById('quiz-word-display').textContent = blankWord;
+            document.getElementById('quiz-meaning-display').textContent = `意味: ${wordObj.meaning}`;
+            
+            const choicesContainer = document.getElementById('quiz-choices-container');
+            choicesContainer.innerHTML = '';
+
+            choices.forEach(char => {
+                const btn = document.createElement('button');
+                btn.className = 'py-3 rounded-2xl bg-slate-100 hover:bg-indigo-50 border-2 border-slate-200 hover:border-indigo-400 text-slate-800 font-black text-xl shadow-sm transition-all active:scale-95';
+                btn.textContent = char.toUpperCase();
+                btn.onclick = () => handleQuizAnswer(char);
+                choicesContainer.appendChild(btn);
+            });
+
+            updateQuizBookmarkBtnState();
+            window.speakWord(wordObj.word);
+
+            const quizModal = document.getElementById('quiz-modal');
+            const card = document.getElementById('quiz-modal-card');
+            quizModal.classList.remove('opacity-0', 'pointer-events-none');
+            card.classList.remove('scale-90');
+            card.classList.add('scale-100');
+        };
+
+        window.speakCurrentWord = function() {
+            if (currentQuizQuestion) {
+                window.speakWord(currentQuizQuestion.wordObj.word);
+            }
+        };
+
+        window.handleQuizAnswer = function(selectedChar) {
+            const game = window.appState.currentGame;
+            game.totalQuestions++;
+
+            if (selectedChar === currentQuizQuestion.correctChar) {
+                soundEngine.playCorrect();
+                
+                if (!game.roundWords.some(w => w.word === currentQuizQuestion.wordObj.word)) {
+                    game.roundWords.push(currentQuizQuestion.wordObj);
+                }
+
+                game.executeMove(currentQuizQuestion.move);
+                closeQuizModal();
+                renderGameBoard();
+                updateGameplayStats();
+
+                if (!game.hasAvailableMoves()) {
+                    setTimeout(() => showRoundResultModal(), 400);
+                }
+            } else {
+                soundEngine.playWrong();
+                closeQuizModal();
+                game.selected = null;
+                game.validTargets = [];
+                renderGameBoard();
+                updateGameplayStats();
+            }
+        };
+
+        window.closeQuizModal = function() {
+            const quizModal = document.getElementById('quiz-modal');
+            const card = document.getElementById('quiz-modal-card');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-90');
+            quizModal.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        window.toggleQuizBookmark = function() {
+            if (!currentQuizQuestion) return;
+            const wordObj = currentQuizQuestion.wordObj;
+            const saved = window.appState.userProfile.savedWords;
+            const idx = saved.findIndex(w => w.word === wordObj.word);
+
+            if (idx >= 0) {
+                saved.splice(idx, 1);
+            } else {
+                saved.push(wordObj);
+            }
+
+            saveUserProfileToLocalStorage();
+            updateQuizBookmarkBtnState();
+            updateHeaderVocabBadge();
+        };
+
+        function updateQuizBookmarkBtnState() {
+            if (!currentQuizQuestion) return;
+            const isSaved = window.appState.userProfile.savedWords.some(w => w.word === currentQuizQuestion.wordObj.word);
+            const icon = document.getElementById('quiz-bookmark-icon');
+            const text = document.getElementById('quiz-bookmark-text');
+            if (isSaved) {
+                icon.textContent = '🌟';
+                text.textContent = '登録済み';
+            } else {
+                icon.textContent = '⭐';
+                text.textContent = '単語帳に登録';
+            }
+        }
+
+        window.openMyVocabModal = function() {
+            renderMyVocabList();
+            const modal = document.getElementById('modal-vocab');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.closeMyVocabModal = function() {
+            const modal = document.getElementById('modal-vocab');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        function renderMyVocabList() {
+            const container = document.getElementById('vocab-list-container');
+            const countEl = document.getElementById('vocab-total-count');
+            const saved = window.appState.userProfile.savedWords;
+
+            countEl.textContent = `登録済み: ${saved.length} 語`;
+            container.innerHTML = '';
+
+            if (saved.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-xs text-slate-400">
+                        登録された単語はありません。<br>クイズ挑戦中に「⭐」を押して追加しよう！
+                    </div>
+                `;
+                return;
+            }
+
+            saved.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'p-3 rounded-2xl bg-white/80 border border-slate-200/80 flex items-center justify-between shadow-sm';
+                row.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <button onclick="speakWord('${item.word}')" class="p-2 rounded-xl bg-indigo-100 hover:bg-indigo-200 text-indigo-700 transition-all">
+                            🔊
+                        </button>
+                        <div>
+                            <div class="font-black text-slate-900 text-sm font-mono">${item.word}</div>
+                            <div class="text-xs text-slate-500 font-bold">${item.meaning}</div>
+                        </div>
+                    </div>
+                    <button onclick="removeVocabItem('${item.word}')" class="p-2 text-slate-400 hover:text-rose-500 text-xs font-bold transition-all">
+                        ✕
+                    </button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        window.removeVocabItem = function(word) {
+            const saved = window.appState.userProfile.savedWords;
+            window.appState.userProfile.savedWords = saved.filter(w => w.word !== word);
+            saveUserProfileToLocalStorage();
+            renderMyVocabList();
+            updateHeaderVocabBadge();
+        };
+
+        window.clearAllVocab = function() {
+            window.appState.userProfile.savedWords = [];
+            saveUserProfileToLocalStorage();
+            renderMyVocabList();
+            updateHeaderVocabBadge();
+        };
+
+        window.renderGameBoard = function() {
+            const boardEl = document.getElementById('game-board');
+            if (!boardEl || !window.appState.currentGame) return;
+
+            const game = window.appState.currentGame;
+            boardEl.style.gridTemplateColumns = `repeat(${game.gridCols}, minmax(0, 1fr))`;
+            boardEl.innerHTML = '';
+
+            for (let r = 0; r < game.gridRows; r++) {
+                for (let c = 0; c < game.gridCols; c++) {
+                    const cellVal = game.board[r][c];
+                    const cell = document.createElement('div');
+                    cell.className = "aspect-square flex items-center justify-center relative";
+
+                    if (cellVal === -1) {
+                        cell.className += " opacity-0 pointer-events-none";
+                    } else if (cellVal === 0) {
+                        const targetMatch = game.validTargets.find(t => t.tr === r && t.tc === c);
+                        if (targetMatch) {
+                            cell.innerHTML = `
+                                <div onclick="handleTargetHoleClick(${r}, ${c})" class="w-full h-full rounded-full hole target-valid flex items-center justify-center">
+                                    <div class="w-3 h-3 rounded-full bg-emerald-300 shadow"></div>
+                                </div>
+                            `;
+                        } else {
+                            cell.innerHTML = `
+                                <div class="w-3/4 h-3/4 rounded-full hole border border-slate-700/50"></div>
+                            `;
+                        }
+                    } else if (cellVal === 1) {
+                        const isSelected = game.selected && game.selected.r === r && game.selected.c === c;
+                        cell.innerHTML = `
+                            <div onclick="handlePegClick(${r}, ${c})" class="w-full h-full rounded-full flex items-center justify-center cursor-pointer">
+                                <div class="w-5/6 h-5/6 rounded-full piece ${isSelected ? 'selected' : ''}"></div>
+                            </div>
+                        `;
+                    }
+
+                    boardEl.appendChild(cell);
+                }
+            }
+        };
+
+        window.handlePegClick = function(r, c) {
+            const game = window.appState.currentGame;
+            if (game.selected && game.selected.r === r && game.selected.c === c) {
+                game.selected = null;
+                game.validTargets = [];
+            } else {
+                soundEngine.playSelect();
+                game.selected = { r, c };
+                game.validTargets = game.getValidTargets(r, c);
+            }
+            renderGameBoard();
+        };
+
+        window.handleTargetHoleClick = function(r, c) {
+            const game = window.appState.currentGame;
+            if (!game.selected) return;
+
+            const target = game.validTargets.find(t => t.tr === r && t.tc === c);
+            if (target) {
+                openQuizForMove(game.selected.r, game.selected.c, target);
+            }
+        };
+
+        window.requestHint = function() {
+            const game = window.appState.currentGame;
+            if (!game) return;
+
+            for (let r = 0; r < game.gridRows; r++) {
+                for (let c = 0; c < game.gridCols; c++) {
+                    if (game.board[r][c] === 1) {
+                        const targets = game.getValidTargets(r, c);
+                        if (targets.length > 0) {
+                            game.selected = { r, c };
+                            game.validTargets = targets;
+                            renderGameBoard();
+
+                            const banner = document.getElementById('hint-banner');
+                            banner.classList.remove('opacity-0');
+                            setTimeout(() => banner.classList.add('opacity-0'), 2000);
+                            return;
+                        }
+                    }
+                }
+            }
+        };
+
+        window.updateGameplayStats = function() {
+            const game = window.appState.currentGame;
+            if (!game) return;
+
+            document.getElementById('stat-round').textContent = `R ${game.round}`;
+            document.getElementById('stat-score').textContent = game.score;
+
+            const remaining = game.getRemainingPegsCount();
+            document.getElementById('stat-remaining').textContent = remaining;
+
+            const maxAllowed = game.getMaxAllowedPegs();
+            document.getElementById('stat-target-pegs').textContent = `目標: ${maxAllowed}個以下 (${game.getTargetPercent()}%)`;
+
+            const acc = game.totalQuestions > 0 ? Math.round((game.correctQuestions / game.totalQuestions) * 100) : 100;
+            document.getElementById('stat-accuracy').textContent = `${acc}%`;
+            document.getElementById('stat-highscore').textContent = window.appState.highScore;
+
+            document.getElementById('badge-game-mode').textContent = game.mode === 'quick' ? 'クイック' : 'ノーマル';
+            
+            let diffLabel = '初級';
+            if (game.difficulty === 'inter') diffLabel = '中級';
+            if (game.difficulty === 'adv') diffLabel = '上級';
+            document.getElementById('badge-game-diff').textContent = diffLabel;
+        };
+
+        window.showHomeScreen = function() {
+            document.getElementById('view-home').classList.remove('hidden');
+            document.getElementById('view-game').classList.add('hidden');
+            checkSavedGameExists();
+            updateHomeStats();
+        };
+
+        window.showGameScreen = function() {
+            document.getElementById('view-home').classList.add('hidden');
+            document.getElementById('view-game').classList.remove('hidden');
+        };
+
+        window.setGameMode = function(mode) {
+            window.appState.mode = mode;
+            const btnQ = document.getElementById('home-mode-quick');
+            const btnN = document.getElementById('home-mode-normal');
+
+            if (mode === 'quick') {
+                btnQ.className = 'py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm';
+                btnN.className = 'py-2 rounded-xl transition-all text-slate-600 hover:text-slate-900';
+            } else {
+                btnN.className = 'py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm';
+                btnQ.className = 'py-2 rounded-xl transition-all text-slate-600 hover:text-slate-900';
+            }
+        };
+
+        window.setGameDifficulty = function(diff) {
+            window.appState.difficulty = diff;
+            const btnB = document.getElementById('home-diff-basic');
+            const btnI = document.getElementById('home-diff-inter');
+            const btnA = document.getElementById('home-diff-adv');
+
+            [btnB, btnI, btnA].forEach(btn => btn.className = 'py-2 rounded-xl transition-all text-slate-600 hover:text-slate-900');
+
+            if (diff === 'basic') btnB.className = 'py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm';
+            if (diff === 'inter') btnI.className = 'py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm';
+            if (diff === 'adv') btnA.className = 'py-2 rounded-xl transition-all bg-indigo-600 text-white shadow-sm';
+        };
+
+        window.handleStartNewGameClick = function() {
+            window.appState.currentGame = new SolitaireGame(window.appState.mode, window.appState.difficulty);
+            showGameScreen();
+            renderGameBoard();
+            updateGameplayStats();
+            saveGameStateToLocalStorage();
+        };
+
+        window.resumeSavedGame = function() {
+            const raw = localStorage.getItem(getSavedGameKey());
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    window.appState.currentGame = new SolitaireGame(parsed.mode, parsed.difficulty, parsed);
+                    showGameScreen();
+                    renderGameBoard();
+                    updateGameplayStats();
+                } catch (e) {
+                    console.error("Failed to parse saved game", e);
+                }
+            }
+        };
+
+        window.saveAndPauseGame = function() {
+            saveGameStateToLocalStorage();
+            const badge = document.getElementById('badge-save-status');
+            badge.textContent = "💾 保存完了！";
+            badge.className = "px-2 py-1 rounded-xl bg-emerald-200 text-emerald-800 text-[10px] font-bold";
+            setTimeout(() => {
+                badge.textContent = "💾 セーブ完了";
+                badge.className = "px-2 py-1 rounded-xl bg-slate-200 text-slate-600 text-[10px]";
+            }, 1800);
+        };
+
+        window.showRoundResultModal = function() {
+            const game = window.appState.currentGame;
+            const remaining = game.getRemainingPegsCount();
+            const maxAllowed = game.getMaxAllowedPegs();
+            const isSuccess = remaining <= maxAllowed;
+
+            const modal = document.getElementById('modal-result');
+            const icon = document.getElementById('result-icon');
+            const title = document.getElementById('result-title');
+            const sub = document.getElementById('result-subtitle');
+            const btnNext = document.getElementById('btn-next-round');
+            const btnRestart = document.getElementById('btn-restart-game');
+
+            document.getElementById('res-score').textContent = game.score;
+            document.getElementById('res-pegs').textContent = remaining;
+            const acc = game.totalQuestions > 0 ? Math.round((game.correctQuestions / game.totalQuestions) * 100) : 100;
+            document.getElementById('res-accuracy').textContent = `${acc}%`;
+
+            document.getElementById('result-target-status').textContent = 
+                `🎯 目標: ${maxAllowed}個以下 (${game.getTargetPercent()}%) ➔ 結果: ${remaining}個`;
+
+            if (isSuccess) {
+                soundEngine.playFanfare();
+                triggerConfetti();
+                icon.textContent = "🎉";
+                title.textContent = `ラウンド ${game.round} クリア！`;
+                sub.textContent = "見事なパズルプレイでノルマ達成です！";
+                btnNext.classList.remove('hidden');
+                btnRestart.classList.add('hidden');
+
+                // Round bonus
+                const roundBonus = (maxAllowed - remaining) * 20 + game.round * 50;
+                game.score += roundBonus;
+            } else {
+                soundEngine.playWrong();
+                icon.textContent = "💔";
+                title.textContent = "ゲームオーバー";
+                sub.textContent = "残りのコマ数が目標を上回ってしまいました...";
+                btnNext.classList.add('hidden');
+                btnRestart.classList.remove('hidden');
+            }
+
+            // Render word review
+            const reviewContainer = document.getElementById('res-words-review');
+            reviewContainer.innerHTML = '';
+            if (game.roundWords.length === 0) {
+                reviewContainer.innerHTML = `<div class="text-xs text-slate-400">単語データはありません</div>`;
+            } else {
+                game.roundWords.forEach(w => {
+                    const isBookmarked = window.appState.userProfile.savedWords.some(sw => sw.word === w.word);
+                    const div = document.createElement('div');
+                    div.className = 'px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200 flex items-center justify-between text-xs';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-900 font-mono">${w.word}</span>
+                            <span class="text-slate-500">${w.meaning}</span>
+                        </div>
+                        <button onclick="toggleWordReviewBookmark('${w.word}', '${w.meaning}', this)" class="text-sm">
+                            ${isBookmarked ? '🌟' : '⭐'}
+                        </button>
+                    `;
+                    reviewContainer.appendChild(div);
+                });
+            }
+
+            recordLeaderboardEntry(window.appState.userProfile.username, game.score, game.round);
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.toggleWordReviewBookmark = function(word, meaning, btnEl) {
+            const saved = window.appState.userProfile.savedWords;
+            const idx = saved.findIndex(w => w.word === word);
+            if (idx >= 0) {
+                saved.splice(idx, 1);
+                btnEl.textContent = '⭐';
+            } else {
+                saved.push({ word, meaning });
+                btnEl.textContent = '🌟';
+            }
+            saveUserProfileToLocalStorage();
+            updateHeaderVocabBadge();
+        };
+
+        window.closeResultModal = function() {
+            const modal = document.getElementById('modal-result');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        window.startNextRound = function() {
+            const game = window.appState.currentGame;
+            game.round++;
+            game.roundWords = [];
+            game.setupNewBoard();
+            closeResultModal();
+            renderGameBoard();
+            updateGameplayStats();
+            saveGameStateToLocalStorage();
+        };
+
+        window.openRulesModal = function() {
+            document.getElementById('modal-rules').classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.closeRulesModal = function() {
+            document.getElementById('modal-rules').classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        window.toggleSound = function() {
+            window.appState.soundEnabled = !window.appState.soundEnabled;
+            document.getElementById('icon-sound-on').classList.toggle('hidden', !window.appState.soundEnabled);
+            document.getElementById('icon-sound-off').classList.toggle('hidden', window.appState.soundEnabled);
+        };
+
+        // Leaderboard logic
+        window.openLeaderboardModal = function() {
+            renderLeaderboard();
+            document.getElementById('modal-leaderboard').classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.closeLeaderboardModal = function() {
+            document.getElementById('modal-leaderboard').classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        function recordLeaderboardEntry(name, score, round) {
+            let list = JSON.parse(localStorage.getItem('eigo_jumper_leaderboard') || '[]');
+            list.push({ name, score, round, date: new Date().toLocaleDateString() });
+            list.sort((a, b) => b.score - a.score);
+            list = list.slice(0, 10);
+            localStorage.setItem('eigo_jumper_leaderboard', JSON.stringify(list));
+        }
+
+        function renderLeaderboard() {
+            const container = document.getElementById('leaderboard-list-container');
+            const list = JSON.parse(localStorage.getItem('eigo_jumper_leaderboard') || '[]');
+            container.innerHTML = '';
+
+            if (list.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-xs text-slate-400">まだ記録がありません。プレイしてハイスコアを目指そう！</div>`;
+                return;
+            }
+
+            list.forEach((entry, idx) => {
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`;
+                const row = document.createElement('div');
+                row.className = 'p-3 rounded-2xl bg-white/80 border border-slate-200 flex items-center justify-between shadow-sm text-xs font-bold';
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-base w-6 text-center">${medal}</span>
+                        <span class="text-slate-800">${entry.name}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-slate-500">到達: R${entry.round}</span>
+                        <span class="text-indigo-700 font-black text-sm">${entry.score} pt</span>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // Auth & Persistence Helpers
+        function getSavedGameKey() {
+            return `eigo_jumper_saved_game_${window.appState.userProfile.username}`;
+        }
+
+        function saveGameStateToLocalStorage() {
+            if (window.appState.currentGame) {
+                localStorage.setItem(getSavedGameKey(), JSON.stringify(window.appState.currentGame));
+            }
+        }
+
+        function saveUserProfileToLocalStorage() {
+            const name = window.appState.userProfile.username;
+            localStorage.setItem(`eigo_jumper_profile_${name}`, JSON.stringify(window.appState.userProfile));
+        }
+
+        function saveHighScoreToLocalStorage(score) {
+            localStorage.setItem('eigo_jumper_highscore', score.toString());
+        }
+
+        function checkSavedGameExists() {
+            const container = document.getElementById('container-resume-btn');
+            const raw = localStorage.getItem(getSavedGameKey());
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    document.getElementById('resume-btn-text').textContent = 
+                        `つづきから遊ぶ (R ${parsed.round || 1} • スコア ${parsed.score || 0})`;
+                    container.classList.remove('hidden');
+                } catch (e) {
+                    container.classList.add('hidden');
+                }
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function updateHomeStats() {
+            document.getElementById('home-stat-highscore').textContent = window.appState.highScore;
+            document.getElementById('home-stat-vocab').textContent = `${window.appState.userProfile.savedWords.length} 語`;
+            updateHeaderVocabBadge();
+        }
+
+        function updateHeaderVocabBadge() {
+            const badge = document.getElementById('header-vocab-badge');
+            badge.textContent = window.appState.userProfile.savedWords.length;
+        }
+
+        window.openAuthModal = function() {
+            const modal = document.getElementById('modal-auth');
+            const stateGuest = document.getElementById('auth-state-guest');
+            const stateUser = document.getElementById('auth-state-user');
+
+            if (window.appState.userProfile.isGuest) {
+                stateGuest.classList.remove('hidden');
+                stateUser.classList.add('hidden');
+            } else {
+                stateGuest.classList.add('hidden');
+                stateUser.classList.remove('hidden');
+                document.getElementById('auth-current-username').textContent = window.appState.userProfile.username;
+            }
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        };
+
+        window.closeAuthModal = function() {
+            document.getElementById('modal-auth').classList.add('opacity-0', 'pointer-events-none');
+        };
+
+        window.handleAuthSubmit = function(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('auth-input-name').value.trim();
+            if (!nameInput) return;
+
+            window.appState.userProfile.username = nameInput;
+            window.appState.userProfile.isGuest = false;
+
+            const savedProf = localStorage.getItem(`eigo_jumper_profile_${nameInput}`);
+            if (savedProf) {
+                try {
+                    window.appState.userProfile = JSON.parse(savedProf);
+                } catch (err) {}
+            } else {
+                saveUserProfileToLocalStorage();
+            }
+
+            document.getElementById('user-name-badge').textContent = nameInput;
+            closeAuthModal();
+            showHomeScreen();
+        };
+
+        window.switchUserAccount = function() {
+            document.getElementById('auth-state-guest').classList.remove('hidden');
+            document.getElementById('auth-state-user').classList.add('hidden');
+        };
+
+        window.handleLogout = function() {
+            window.appState.userProfile = { username: 'ゲスト', isGuest: true, savedWords: [] };
+            document.getElementById('user-name-badge').textContent = 'ゲスト';
+            closeAuthModal();
+            showHomeScreen();
+        };
+
+        // App Initialization
+        window.onload = function() {
+            const savedHs = localStorage.getItem('eigo_jumper_highscore');
+            if (savedHs) {
+                window.appState.highScore = parseInt(savedHs, 10) || 0;
+            }
+
+            updateHomeStats();
+            checkSavedGameExists();
+        };
+    </script>
+</body>
+</html>
